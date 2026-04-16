@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cloud Vehicle Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
+        h1 { color: #333; }
+        #map { height: 550px; width: 100%; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        #status {
+            margin-top: 12px;
+            padding: 10px 16px;
+            background: #fff;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #555;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        }
+        #status span { font-weight: bold; color: #2196F3; }
+        .dot {
+            display: inline-block;
+            width: 10px; height: 10px;
+            background: green;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: blink 1.2s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+    </style>
+</head>
+<body>
+    <h1>🚗 Live Cloud Vehicle Tracker</h1>
+    <div id="map"></div>
+    <div id="status">⏳ Connecting to cloud...</div>
+
+    <script>
+        // Car icon using SVG (no emoji)
+        var carIcon = L.divIcon({
+            html: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+                <circle cx="16" cy="16" r="15" fill="#1565C0" stroke="white" stroke-width="2"/>
+                <rect x="9" y="11" width="14" height="10" rx="3" fill="white"/>
+                <rect x="11" y="12" width="10" height="5" rx="2" fill="#1565C0"/>
+                <circle cx="11" cy="22" r="2.5" fill="#333"/>
+                <circle cx="21" cy="22" r="2.5" fill="#333"/>
+                <circle cx="11" cy="22" r="1" fill="#aaa"/>
+                <circle cx="21" cy="22" r="1" fill="#aaa"/>
+            </svg>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            className: ''
+        });
+
+        // Map setup
+        var map = L.map('map').setView([19.0760, 72.8777], 16);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap © CARTO'
+        }).addTo(map);
+
+        // Marker with car icon
+        var marker = L.marker([19.0760, 72.8777], { icon: carIcon }).addTo(map);
+
+        // Trail polyline
+        var trailCoords = [];
+        var trailLine = L.polyline([], {
+            color: '#2196F3',
+            weight: 3,
+            opacity: 0.6
+        }).addTo(map);
+
+        // Firebase URL
+        const dbUrl = "https://vehicle-tracker-edff8-default-rtdb.firebaseio.com/vehicle_location.json";
+
+        async function updateMap() {
+            try {
+                const response = await fetch(dbUrl);
+                const data = await response.json();
+
+                if (data && data.latitude && data.longitude) {
+                    var lat = data.latitude;
+                    var lng = data.longitude;
+                    var newLatLng = new L.LatLng(lat, lng);
+
+                    // Move marker
+                    marker.setLatLng(newLatLng);
+                    map.panTo(newLatLng);
+
+                    // Add to trail
+                    trailCoords.push([lat, lng]);
+                    if (trailCoords.length > 100) trailCoords.shift();
+                    trailLine.setLatLngs(trailCoords);
+
+                    // Update status bar
+                    var time = new Date(data.timestamp * 1000).toLocaleTimeString();
+                    document.getElementById('status').innerHTML =
+                        `<span class="dot"></span> LIVE &nbsp;|&nbsp; 
+                         Lat: <span>${lat.toFixed(5)}</span> &nbsp;
+                         Lng: <span>${lng.toFixed(5)}</span> &nbsp;|&nbsp; 
+                         Last update: <span>${time}</span>`;
+                }
+            } catch (error) {
+                document.getElementById('status').innerHTML = '❌ Cloud connection error — is simulator.py running?';
+                console.error("Error:", error);
+            }
+        }
+
+        // Update every 3 seconds
+        setInterval(updateMap, 3000);
+        updateMap(); // run immediately on load
+    </script>
+</body>
+</html>
